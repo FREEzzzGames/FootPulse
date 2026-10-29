@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchApiHealth, fetchArchiveEvents, fetchArchiveMatches, fetchAvailableLeagues, fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type ApiHealth, type DataSource, type Match, type MatchEvent, type OpenLigaLeague, type PlayerSearchResult } from "./api";
+import { fetchApiHealth, fetchArchiveEvents, fetchArchiveMatches, fetchAvailableLeagues, fetchGoalGetters, fetchLeagueTable, fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type ApiHealth, type DataSource, type GoalGetter, type LeagueStanding, type Match, type MatchEvent, type OpenLigaLeague, type PlayerSearchResult } from "./api";
 
 const leagues = [{ id: "bl1", label: "Бундеслига" }, { id: "bl2", label: "2. Бундеслига" }, { id: "dfb", label: "DFB-Pokal" }, { id: "em", label: "Евро" }, { id: "wm", label: "Чемпионат мира" }];
 type View = "Матчи" | "Статистика" | "Источники";
@@ -87,6 +87,10 @@ export function App() {
   const [players, setPlayers] = useState<PlayerSearchResult[]>([]);
   const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
   const [playerSearchError, setPlayerSearchError] = useState("");
+  const [standings, setStandings] = useState<LeagueStanding[]>([]);
+  const [goalGetters, setGoalGetters] = useState<GoalGetter[]>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsErrors, setStatsErrors] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -148,6 +152,23 @@ export function App() {
     }, 250);
     return () => { active = false; clearTimeout(timer); };
   }, [query]);
+  useEffect(() => {
+    if (view !== "Статистика") return;
+    let active = true;
+    setStatsLoading(true);
+    setStatsErrors([]);
+    Promise.allSettled([fetchLeagueTable(league, season), fetchGoalGetters(league, season)]).then(results => {
+      if (!active) return;
+      const errors: string[] = [];
+      if (results[0].status === "fulfilled") setStandings(results[0].value);
+      else { setStandings([]); errors.push("Таблица: " + (results[0].reason instanceof Error ? results[0].reason.message : "источник недоступен")); }
+      if (results[1].status === "fulfilled") setGoalGetters(results[1].value);
+      else { setGoalGetters([]); errors.push("Бомбардиры: " + (results[1].reason instanceof Error ? results[1].reason.message : "источник недоступен")); }
+      setStatsErrors(errors);
+    }).finally(() => { if (active) setStatsLoading(false); });
+    return () => { active = false; };
+  }, [view, league, season]);
+
   const finished = matches.filter(m => m.matchIsFinished).length;
   const goalEvents = events.filter(e => e.type?.name === "Shot" && e.shot?.outcome?.name === "Goal");
   return <div className="app">
@@ -178,7 +199,23 @@ export function App() {
       <div className="footnote">Источник: {source === "statsbomb" ? "StatsBomb Open Data" : "OpenLigaDB"}{updated && " · обновлено " + updated}. Доступность зависит от покрытия источника.</div>
     </main>}
 
-    {view === "Статистика" && <main><div className="pagehead"><div><div className="kicker">EVENT DATA</div><h1>Статистика</h1></div></div><section className="panel"><h2>StatsBomb Open Data</h2><p>Открытые события матчей выбранных соревнований. Для первого подключённого набора доступны матчи чемпионата мира 2022 года и события матча: удары, голы, передачи, замены и позиции.</p><div className="statcards"><div><b>ЧМ-2022</b><small>Соревнование</small></div><div><b>События</b><small>Детали матча</small></div><div><b>Бесплатно</b><small>Публичный набор данных</small></div></div><button onClick={() => { setSource("statsbomb"); setView("Матчи"); }}>Открыть матчи ЧМ-2022 ↗</button><p className="fine">Это не полная база всех лиг и сезонов. Набор данных ограничен соревнованиями, опубликованными StatsBomb Open Data.</p></section></main>}
+    {view === "Статистика" && <main>
+      <div className="pagehead"><div><div className="kicker">LEAGUE DATA · OPENLIGADB</div><h1>Статистика</h1></div><button className="refresh" type="button" onClick={() => { setView("Матчи"); setSource("statsbomb"); }} aria-label="Открыть события ЧМ-2022">↗</button></div>
+      <section className="panel">
+        <div className="stats-filters">
+          <select aria-label="Лига для статистики" value={league} onChange={e => setLeague(e.target.value)}>{(availableLeagues.length ? availableLeagues.map(l => ({ id: l.leagueShortcut, label: l.leagueName })) : leagues).map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</select>
+          <select aria-label="Сезон статистики" value={season} onChange={e => setSeason(e.target.value)}>{["2026", "2025", "2024", "2023", "2022", "2021", "2020"].map(y => <option key={y}>{y}</option>)}</select>
+        </div>
+        <div className="stats-section-head"><h2>Турнирная таблица</h2><span>{statsLoading ? "обновление…" : standings.length ? standings.length + " команд" : "нет данных"}</span></div>
+        {statsErrors.some(e => e.startsWith("Таблица:")) && <p className="fine">{statsErrors.find(e => e.startsWith("Таблица:"))}</p>}
+        {!statsLoading && !standings.length && !statsErrors.some(e => e.startsWith("Таблица:")) && <p className="fine">Источник не публикует таблицу для выбранного турнира или сезона.</p>}
+        {standings.length > 0 && <div className="table-wrap"><table className="league-table"><thead><tr><th>#</th><th>Команда</th><th>И</th><th>В</th><th>Н</th><th>П</th><th>Мячи</th><th>±</th><th>Очки</th></tr></thead><tbody>{standings.map((team,index) => <tr key={team.teamInfoId || team.teamName}><td>{index+1}</td><td>{team.teamName}</td><td>{team.matches}</td><td>{team.won}</td><td>{team.draw}</td><td>{team.lost}</td><td>{team.goals}:{team.opponentGoals}</td><td>{team.goalDiff > 0 ? "+" : ""}{team.goalDiff}</td><td><b>{team.points}</b></td></tr>)}</tbody></table></div>}
+        <div className="stats-section-head scorers-head"><h2>Бомбардиры</h2><span>{statsLoading ? "обновление…" : goalGetters.length ? goalGetters.length + " игроков" : "нет данных"}</span></div>
+        {statsErrors.some(e => e.startsWith("Бомбардиры:")) && <p className="fine">{statsErrors.find(e => e.startsWith("Бомбардиры:"))}</p>}
+        {goalGetters.length > 0 && <div className="scorers">{goalGetters.slice(0,20).map((player,index)=><div className="scorer-row" key={player.goalGetterId || player.goalGetterName}><span className="scorer-rank">{index+1}</span><b>{player.goalGetterName}</b><strong>{player.goalCount}</strong></div>)}</div>}
+      </section>
+      <section className="panel"><h2>Графические разборы матчей</h2><p>Координаты ударов и передач доступны для опубликованных матчей StatsBomb. Запись событий открывается из карточки матча.</p><div className="statcards"><div><b>ЧМ-2022</b><small>Открытый набор</small></div><div><b>События</b><small>Удары, передачи, замены</small></div><div><b>Графический повтор</b><small>По координатам событий</small></div></div><button onClick={() => { setSource("statsbomb"); setView("Матчи"); }}>Открыть матчи ЧМ-2022 ↗</button><p className="fine">Покрытие зависит от открытого набора. Для OpenLigaDB доступны результаты и таблицы, но не полные координаты событий.</p></section>
+    </main>}
 
     {view === "Источники" && <main><div className="pagehead"><div><div className="kicker">DATA REGISTRY</div><h1>Источники</h1></div></div><div className="registry">
       <a href="https://www.openligadb.de/" target="_blank" rel="noreferrer"><b>OpenLigaDB</b><span>Матчи и результаты · публичный API · без ключа</span><i>Подключён ↗</i></a>
