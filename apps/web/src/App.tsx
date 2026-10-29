@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchApiHealth, fetchArchiveEvents, fetchArchiveMatches, fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type ApiHealth, type DataSource, type Match, type MatchEvent, type PlayerSearchResult } from "./api";
+import { fetchApiHealth, fetchArchiveEvents, fetchArchiveMatches, fetchAvailableLeagues, fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type ApiHealth, type DataSource, type Match, type MatchEvent, type OpenLigaLeague, type PlayerSearchResult } from "./api";
 
 const leagues = [{ id: "bl1", label: "Бундеслига" }, { id: "bl2", label: "2. Бундеслига" }, { id: "dfb", label: "DFB-Pokal" }, { id: "em", label: "Евро" }, { id: "wm", label: "Чемпионат мира" }];
 type View = "Матчи" | "Статистика" | "Источники";
@@ -73,6 +73,8 @@ export function App() {
   const [source, setSource] = useState<DataSource>("openligadb");
   const [league, setLeague] = useState("bl1");
   const [season, setSeason] = useState("2026");
+  const [availableLeagues, setAvailableLeagues] = useState<OpenLigaLeague[]>([]);
+  const [leagueLoadError, setLeagueLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(false);
@@ -85,6 +87,22 @@ export function App() {
   const [players, setPlayers] = useState<PlayerSearchResult[]>([]);
   const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
   const [playerSearchError, setPlayerSearchError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLeagueLoadError("");
+    void fetchAvailableLeagues(season).then(rows => {
+      if (!active) return;
+      setAvailableLeagues(rows);
+      setLeague(current => rows.some(item => item.leagueShortcut === current) ? current : (rows[0]?.leagueShortcut ?? current));
+    }).catch(error => {
+      if (active) {
+        setAvailableLeagues([]);
+        setLeagueLoadError(error instanceof Error ? error.message : "Список лиг недоступен");
+      }
+    });
+    return () => { active = false; };
+  }, [season]);
 
   useEffect(() => {
     let active = true;
@@ -147,8 +165,9 @@ export function App() {
       <div className="pagehead"><div><div className="kicker">ОТКРЫТЫЕ ФУТБОЛЬНЫЕ ДАННЫЕ</div><h1>Матчи</h1></div><button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? "Загрузка…" : "↻"}</button></div>
       <div className="source-switch"><button className={source === "openligadb" ? "chosen" : ""} onClick={() => setSource("openligadb")}>OpenLigaDB <small>Турниры Германии</small></button><button className={source === "statsbomb" ? "chosen" : ""} onClick={() => setSource("statsbomb")}>StatsBomb <small>ЧМ-2022 · события</small></button><button className={source === "archive" ? "chosen" : ""} onClick={() => setSource("archive")}>Архив <small>PostgreSQL · импорт</small></button></div>
       {query.trim().length >= 2 && <section className="player-results"><div className="player-results-head"><b>ПОИСК ИГРОКОВ</b><span>{playerSearchLoading ? "поиск…" : players.length + " результатов"}</span></div>{playerSearchError ? <p className="fine">{playerSearchError}. Поиск использует единую базу FootPulse; если PostgreSQL ещё не подключён или не импортирован, результаты недоступны.</p> : !playerSearchLoading && !players.length ? <p className="fine">Игроки по этому запросу не найдены в импортированных данных.</p> : players.map(p => <div className="player-result" key={p.id}><span><b>{p.full_name}</b><small>{p.nationality || "Национальность не указана"} · {p.matches} матчей</small></span><strong>{p.goals} <small>ГОЛЫ</small></strong><strong>{p.assists} <small>ПАСЫ</small></strong></div>)}</section>}
+      {source === "openligadb" && leagueLoadError && <p className="fine">Не удалось обновить каталог лиг ({leagueLoadError}); используется резервный список.</p>}
       {source === "archive" && <p className="archive-note">Архив из PostgreSQL FootPulse. Здесь отображаются только импортированные матчи; пустой архив не заполняется демонстрационными данными.</p>}
-      {source === "openligadb" && <div className="filters"><select aria-label="Турнир" value={league} onChange={e => setLeague(e.target.value)}>{leagues.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</select><select aria-label="Сезон" value={season} onChange={e => setSeason(e.target.value)}>{["2026", "2025", "2024", "2023", "2022", "2021", "2020"].map(y => <option key={y}>{y}</option>)}</select></div>}
+      {source === "openligadb" && <div className="filters"><select aria-label="Турнир" value={league} onChange={e => setLeague(e.target.value)}>{(availableLeagues.length ? availableLeagues.map(l => ({ id: l.leagueShortcut, label: l.leagueName })) : leagues).map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</select><select aria-label="Сезон" value={season} onChange={e => setSeason(e.target.value)}>{["2026", "2025", "2024", "2023", "2022", "2021", "2020"].map(y => <option key={y}>{y}</option>)}</select></div>}
       <div className="statsline"><span>{filtered.length} матчей</span><span>{finished} завершено</span><span className="live-dot">{loading ? "обновление" : error ? "источник недоступен" : "данные загружены"}</span></div>
       {error ? <div className="empty"><b>Не удалось получить данные</b><p>{error}</p><button onClick={() => void load()}>Повторить</button></div> : loading ? <div className="empty">Загружаем данные из выбранного источника…</div> : !filtered.length ? <div className="empty">Совпадений нет. Измените запрос или выберите другой турнир.</div> :
         <div className="matchlist">{filtered.slice(0, 100).map(m => <button className="match" key={m.source + m.matchID} onClick={() => void openMatch(m)}>
