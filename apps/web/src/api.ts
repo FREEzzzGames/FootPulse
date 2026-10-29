@@ -68,7 +68,7 @@ export async function fetchStatsBombEvents(matchId: number): Promise<MatchEvent[
 }
 
 export function score(match: Match): string {
-  if (match.source === "statsbomb") {
+  if (match.source !== "openligadb") {
     return match.homeScore == null || match.awayScore == null ? "— : —" : match.homeScore + " : " + match.awayScore;
   }
   const list = match.matchResults ?? [];
