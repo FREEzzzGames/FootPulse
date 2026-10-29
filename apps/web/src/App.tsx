@@ -1,26 +1,90 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchMatches, score, type Match } from "./api";
+import { fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, score, type DataSource, type Match, type MatchEvent } from "./api";
 
-const leagues = [{id:"bl1",label:"Бундеслига"},{id:"bl2",label:"2. Бундеслига"},{id:"dfb",label:"DFB-Pokal"},{id:"em",label:"Евро"},{id:"wm",label:"Чемпионат мира"}];
-type View = "Обзор" | "Матчи" | "Игроки" | "Команды" | "Видеоархив";
-function dateLabel(value:string){const d=new Date(value);return Number.isNaN(d.getTime())?"Дата неизвестна":d.toLocaleString("ru-RU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});}
-export function App(){
- const [view,setView]=useState<View>("Обзор"),[league,setLeague]=useState("bl1"),[season,setSeason]=useState("2026"),[query,setQuery]=useState(""),[matches,setMatches]=useState<Match[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState(""),[updated,setUpdated]=useState(""),[selected,setSelected]=useState<Match|null>(null),[finishedOnly,setFinishedOnly]=useState(false);
- async function load(){setLoading(true);setError("");try{const data=await fetchMatches(league,season);data.sort((a,b)=>new Date(a.matchDateTime).getTime()-new Date(b.matchDateTime).getTime());setMatches(data);setUpdated(new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}));}catch(e){setError(e instanceof Error?e.message:"Ошибка загрузки источника");setMatches([]);}finally{setLoading(false);}}
- useEffect(()=>{void load();},[league,season]);
- const filtered=useMemo(()=>matches.filter(m=>[m.team1?.teamName,m.team2?.teamName,m.leagueName].join(" ").toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru"))&&(!finishedOnly||m.matchIsFinished)),[matches,query,finishedOnly]);
- const done=matches.filter(m=>m.matchIsFinished).length;
- return <div className="shell">
-  <header className="top"><a className="brand" href="#" onClick={e=>{e.preventDefault();setView("Обзор");}}><b>ϟ</b><span>FootPulse<small>FOOTBALL DATA HUB</small></span></a><label className="search">⌕ <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Поиск команды или турнира…" /></label><button onClick={()=>void load()} disabled={loading}>{loading?"Загрузка…":"↻ Обновить"}</button></header>
-  <nav className="nav">{(["Обзор","Матчи","Игроки","Команды","Видеоархив"] as View[]).map(v=><button className={view===v?"active":""} key={v} onClick={()=>setView(v)}>{v}</button>)}</nav>
-  {view==="Обзор"||view==="Матчи"?<main className="layout">
-   <section className="card hero"><div className="eyebrow">ФУТБОЛЬНАЯ ИСТОРИЯ • ОТКРЫТЫЕ ДАННЫЕ</div><h1>Весь футбол.<br/><em>В цифрах и фактах.</em></h1><p>Матчи и результаты из открытых источников. Неподтверждённая статистика не подменяется вымышленными данными.</p><div className="metrics"><div><b>{matches.length}</b><small>матчей получено</small></div><div><b>{done}</b><small>завершено</small></div><div><b>{matches.length-done}</b><small>прочие статусы</small></div></div></section>
-   <section className="card source"><h2>Источник данных</h2><span className={error?"status error":"status"}>{error?"Ошибка источника":loading?"Загрузка…":"OpenLigaDB"}</span><p>{error||"Данные загружаются из OpenLigaDB. Покрытие турниров и сезонов зависит от источника."}</p>{updated&&<small>Последнее обновление: {updated}</small>}<a href="https://www.openligadb.de/" target="_blank" rel="noreferrer">Открыть источник ↗</a></section>
-   <section className="card matches"><div className="section-title"><h2>Матчи</h2><select value={season} onChange={e=>setSeason(e.target.value)}>{["2026","2025","2024","2023","2022","2021","2020"].map(y=><option key={y}>{y}</option>)}</select></div><div className="leagues">{leagues.map(l=><button key={l.id} className={league===l.id?"active":""} onClick={()=>setLeague(l.id)}>{l.label}</button>)}</div><div className="filter"><span>{filtered.length} матчей по фильтру</span><button onClick={()=>setFinishedOnly(v=>!v)}>{finishedOnly?"Показать все":"Только завершённые"}</button></div>
-   {loading?<div className="empty">Загружаем реальные данные…</div>:error?<div className="empty"><b>Не удалось получить матчи</b><p>{error}. Проверьте сеть или доступность API.</p><button onClick={()=>void load()}>Повторить</button></div>:!filtered.length?<div className="empty">Для выбранного турнира, сезона и фильтра данные не найдены.</div>:<div>{filtered.slice(0,80).map(m=><button className="match" key={m.matchID} onClick={()=>setSelected(m)}><span className={m.matchIsFinished?"date done":"date"}>{m.matchIsFinished?"FT":dateLabel(m.matchDateTime)}</span><span className="teams"><b>{m.team1?.teamName||"Команда 1"}</b><span>—</span><b>{m.team2?.teamName||"Команда 2"}</b><small>{m.leagueName||leagues.find(x=>x.id===league)?.label}</small></span><strong>{score(m)}</strong></button>)}</div>}<small className="footnote">Источник: OpenLigaDB{updated?" · обновлено в "+updated:""} · отображается до 80 записей</small></section>
-   <section className="card modules"><h2>Каталог футбола</h2>{[["Игроки","Профили и карьера — источник данных ещё не подключён"],["Команды","История клуба и составы — источник данных ещё не подключён"],["Видеоархив","Поиск доступных публичных видеоматериалов"]].map(([name,desc])=><button className="module" key={name} onClick={()=>setView(name==="Игроки"?"Игроки":name==="Команды"?"Команды":"Видеоархив")}><span>◇</span><div><b>{name}</b><small>{desc}</small></div>↗</button>)}</section>
-  </main>:view==="Видеоархив"?<section className="card page"><h1>Видеоархив</h1><p>Это поиск по YouTube, а не подтверждённый каталог конкретных матчей. Воспроизведение зависит от автора и разрешений на встраивание.</p><form className="video-search" onSubmit={e=>{e.preventDefault();const value=(e.currentTarget.elements.namedItem("term") as HTMLInputElement).value.trim()||"football full match";window.open("https://www.youtube.com/results?search_query="+encodeURIComponent(value),"_blank","noopener,noreferrer");}}><input name="term" placeholder="Команда, игрок, финал, исторический матч…"/><button>Искать видео ↗</button></form><div className="video-grid">{[["Полные матчи","football full match"],["Исторические матчи","classic football full match"],["Тактические разборы","football tactical analysis"],["Обзоры","football match highlights"]].map(([label,q])=><a className="video-tile" key={label} href={"https://www.youtube.com/results?search_query="+encodeURIComponent(q)} target="_blank" rel="noreferrer"><span>▷</span><b>{label}</b><small>Открыть поиск ↗</small></a>)}</div></section>:<section className="card page"><div className="eyebrow">КАТАЛОГ</div><h1>{view}</h1><p>Этот модуль будет подключён после проверки подходящих бесплатных источников, идентификаторов и условий использования данных. Пустые профили и выдуманная статистика не создаются.</p><div className="notice">Модуль предусмотрен архитектурой, но пока не реализован как база данных.</div></section>}
-  <footer>FootPulse · Открытые источники · Полнота данных зависит от источника и сезона.</footer>
-  {selected&&<div className="backdrop" onClick={()=>setSelected(null)}><section className="modal card" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setSelected(null)}>×</button><small className="eyebrow">{selected.leagueName||"Матч"}</small><h2>{selected.team1?.teamName} <em>{score(selected)}</em> {selected.team2?.teamName}</h2><p>{dateLabel(selected.matchDateTime)} · {selected.matchIsFinished?"Завершён":"Источник не отметил матч завершённым"}</p><p className="muted">Подробные события и личная статистика не предоставляются, если их нет в источнике.</p><a href="https://www.openligadb.de/" target="_blank" rel="noreferrer">Источник данных ↗</a></section></div>}
- </div>;
+const leagues = [{ id: "bl1", label: "Бундеслига" }, { id: "bl2", label: "2. Бундеслига" }, { id: "dfb", label: "DFB-Pokal" }, { id: "em", label: "Евро" }, { id: "wm", label: "Чемпионат мира" }];
+type View = "Матчи" | "Статистика" | "Источники";
+function dateLabel(value: string) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "Дата неизвестна" : d.toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+export function App() {
+  const [view, setView] = useState<View>("Матчи");
+  const [source, setSource] = useState<DataSource>("openligadb");
+  const [league, setLeague] = useState("bl1");
+  const [season, setSeason] = useState("2026");
+  const [query, setQuery] = useState("");
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [updated, setUpdated] = useState("");
+  const [selected, setSelected] = useState<Match | null>(null);
+  const [events, setEvents] = useState<MatchEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState("");
+
+  async function load(nextSource = source) {
+    setLoading(true); setError("");
+    try {
+      const data = nextSource === "statsbomb" ? await fetchStatsBombWorldCup() : await fetchMatches(league, season);
+      data.sort((a, b) => new Date(b.matchDateTime).getTime() - new Date(a.matchDateTime).getTime());
+      setMatches(data);
+      setUpdated(new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка загрузки источника");
+      setMatches([]);
+    } finally { setLoading(false); }
+  }
+  useEffect(() => { void load(source); }, [source, league, season]);
+
+  async function openMatch(match: Match) {
+    setSelected(match); setEvents([]); setEventsError("");
+    if (match.source !== "statsbomb" || !match.sourceMatchId) return;
+    setEventsLoading(true);
+    try { setEvents(await fetchStatsBombEvents(match.sourceMatchId)); }
+    catch (e) { setEventsError(e instanceof Error ? e.message : "Не удалось загрузить события"); }
+    finally { setEventsLoading(false); }
+  }
+
+  const filtered = useMemo(() => matches.filter(m => [m.team1?.teamName, m.team2?.teamName, m.leagueName].join(" ").toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru"))), [matches, query]);
+  const finished = matches.filter(m => m.matchIsFinished).length;
+  const goalEvents = events.filter(e => e.type?.name === "Shot" && e.shot?.outcome?.name === "Goal");
+  return <div className="app">
+    <header className="topbar">
+      <button className="wordmark" onClick={() => { setView("Матчи"); setQuery(""); }} aria-label="FootPulse — на главную"><span className="pulse">F</span><span>footpulse</span></button>
+      <nav className="nav">{(["Матчи", "Статистика", "Источники"] as View[]).map(v => <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>{v}</button>)}</nav>
+      <label className="search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Команда или игрок…" /></label>
+    </header>
+
+    {view === "Матчи" && <main>
+      <div className="pagehead"><div><div className="kicker">ОТКРЫТЫЕ ФУТБОЛЬНЫЕ ДАННЫЕ</div><h1>Матчи</h1></div><button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? "Загрузка…" : "↻"}</button></div>
+      <div className="source-switch"><button className={source === "openligadb" ? "chosen" : ""} onClick={() => setSource("openligadb")}>OpenLigaDB <small>Турниры Германии</small></button><button className={source === "statsbomb" ? "chosen" : ""} onClick={() => setSource("statsbomb")}>StatsBomb <small>ЧМ-2022 · события</small></button></div>
+      {source === "openligadb" && <div className="filters"><select aria-label="Турнир" value={league} onChange={e => setLeague(e.target.value)}>{leagues.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</select><select aria-label="Сезон" value={season} onChange={e => setSeason(e.target.value)}>{["2026", "2025", "2024", "2023", "2022", "2021", "2020"].map(y => <option key={y}>{y}</option>)}</select></div>}
+      <div className="statsline"><span>{filtered.length} матчей</span><span>{finished} завершено</span><span className="live-dot">{loading ? "обновление" : error ? "источник недоступен" : "данные загружены"}</span></div>
+      {error ? <div className="empty"><b>Не удалось получить данные</b><p>{error}</p><button onClick={() => void load()}>Повторить</button></div> : loading ? <div className="empty">Загружаем данные из выбранного источника…</div> : !filtered.length ? <div className="empty">Совпадений нет. Измените запрос или выберите другой турнир.</div> :
+        <div className="matchlist">{filtered.slice(0, 100).map(m => <button className="match" key={m.source + m.matchID} onClick={() => void openMatch(m)}>
+          <span className="matchdate">{m.source === "statsbomb" ? dateLabel(m.matchDateTime).split(",")[0] : dateLabel(m.matchDateTime)}</span>
+          <span className="teams"><b>{m.team1?.teamName || "Команда 1"}</b><b>{m.team2?.teamName || "Команда 2"}</b><small>{m.leagueName || leagues.find(l => l.id === league)?.label}</small></span>
+          <strong className="score">{score(m)}</strong><span className="arrow">↗</span>
+        </button>)}</div>}
+      <div className="footnote">Источник: {source === "statsbomb" ? "StatsBomb Open Data" : "OpenLigaDB"}{updated && " · обновлено " + updated}. Доступность зависит от покрытия источника.</div>
+    </main>}
+
+    {view === "Статистика" && <main><div className="pagehead"><div><div className="kicker">EVENT DATA</div><h1>Статистика</h1></div></div><section className="panel"><h2>StatsBomb Open Data</h2><p>Открытые события матчей выбранных соревнований. Для первого подключённого набора доступны матчи чемпионата мира 2022 года и события матча: удары, голы, передачи, замены и позиции.</p><div className="statcards"><div><b>ЧМ-2022</b><small>Соревнование</small></div><div><b>События</b><small>Детали матча</small></div><div><b>Бесплатно</b><small>Публичный набор данных</small></div></div><button onClick={() => { setSource("statsbomb"); setView("Матчи"); }}>Открыть матчи ЧМ-2022 ↗</button><p className="fine">Это не полная база всех лиг и сезонов. Набор данных ограничен соревнованиями, опубликованными StatsBomb Open Data.</p></section></main>}
+
+    {view === "Источники" && <main><div className="pagehead"><div><div className="kicker">DATA REGISTRY</div><h1>Источники</h1></div></div><div className="registry">
+      <a href="https://www.openligadb.de/" target="_blank" rel="noreferrer"><b>OpenLigaDB</b><span>Матчи и результаты · публичный API · без ключа</span><i>Подключён ↗</i></a>
+      <a href="https://github.com/statsbomb/open-data" target="_blank" rel="noreferrer"><b>StatsBomb Open Data</b><span>События, удары, передачи, составы для выбранных соревнований · открытый набор</span><i>Подключён ↗</i></a>
+      <a href="https://www.football-data.co.uk/" target="_blank" rel="noreferrer"><b>football-data.co.uk</b><span>Исторические результаты и CSV-статистика · следующий источник для импорта</span><i>Доступен для интеграции ↗</i></a>
+      <a href="https://www.wikidata.org/" target="_blank" rel="noreferrer"><b>Wikidata</b><span>Справочные данные о клубах, соревнованиях и людях через SPARQL · требует отдельного адаптера</span><i>Доступен для интеграции ↗</i></a>
+    </div><p className="fine">Бесплатный доступ не означает одинаковое покрытие, отсутствие лимитов или разрешение на любое повторное распространение. Для каждого источника сохраняем атрибуцию и границы покрытия.</p></main>}
+
+    <footer><span>FOOTPULSE</span><span>ОТКРЫТЫЕ ДАННЫЕ · БЕЗ ВЫМЫШЛЕННОЙ СТАТИСТИКИ</span></footer>
+
+    {selected && <div className="backdrop" onClick={() => setSelected(null)}><section className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+      <button className="close" onClick={() => setSelected(null)}>×</button><div className="kicker">{selected.leagueName || "Матч"} · {dateLabel(selected.matchDateTime)}</div><h2>{selected.team1?.teamName} <em>{score(selected)}</em> {selected.team2?.teamName}</h2>
+      <div className="modalrule"></div>
+      {selected.source === "statsbomb" ? <><div className="eventhead"><b>СОБЫТИЯ МАТЧА</b><span>{eventsLoading ? "загрузка…" : events.length + " событий"}</span></div>{eventsError && <p className="fine">{eventsError}</p>}{!eventsLoading && !eventsError && <div className="eventstats"><div><b>{goalEvents.length}</b><small>голов по событиям</small></div><div><b>{events.filter(e => e.type?.name === "Shot").length}</b><small>ударов</small></div><div><b>{events.filter(e => e.type?.name === "Pass").length}</b><small>передач</small></div></div>}{events.slice(0, 250).filter(e => ["Shot", "Goal Keeper", "Substitution", "Half Start", "Half End", "Own Goal Against"].includes(e.type?.name || "")).map((e, i) => <div className="event" key={e.id || i}><time>{e.minute ?? "—"}′</time><span><b>{e.type?.name || "Событие"}</b><small>{e.player?.name || e.team?.name || "Данные источника"}</small></span><small>{e.shot?.outcome?.name || e.substitution?.replacement?.name || ""}</small></div>)}</> : <p className="fine">OpenLigaDB предоставляет результат и базовые сведения о матче. Подробные события и индивидуальная статистика показываются только при наличии их в подключённом источнике.</p>}
+      <a className="source-link" href={selected.source === "statsbomb" ? "https://github.com/statsbomb/open-data" : "https://www.openligadb.de/"} target="_blank" rel="noreferrer">Открыть первоисточник ↗</a>
+    </section></div>}
+  </div>;
 }
