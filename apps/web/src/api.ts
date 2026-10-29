@@ -51,6 +51,48 @@ export async function fetchAvailableLeagues(season: string): Promise<OpenLigaLea
     .sort((a: OpenLigaLeague, b: OpenLigaLeague) => a.leagueName.localeCompare(b.leagueName, "ru"));
 }
 
+
+export interface LeagueStanding {
+  teamInfoId: number;
+  teamName: string;
+  teamIconUrl?: string | null;
+  points: number;
+  goals: number;
+  opponentGoals: number;
+  goalDiff: number;
+  matches: number;
+  won: number;
+  draw: number;
+  lost: number;
+}
+export interface GoalGetter {
+  goalGetterId: number;
+  goalGetterName: string;
+  goalCount: number;
+}
+async function fetchOpenLigaArray<T>(path: string, label: string): Promise<T[]> {
+  const response = await fetch("https://api.openligadb.de/" + path, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) throw new Error(label + " HTTP " + response.status);
+  const data: unknown = await response.json();
+  if (!Array.isArray(data)) throw new Error("Неожиданный формат: " + label);
+  return data as T[];
+}
+export function fetchLeagueTable(league: string, season: string): Promise<LeagueStanding[]> {
+  return fetchOpenLigaArray<LeagueStanding>(
+    "getbltable/" + encodeURIComponent(league) + "/" + encodeURIComponent(season),
+    "OpenLigaDB table"
+  );
+}
+export function fetchGoalGetters(league: string, season: string): Promise<GoalGetter[]> {
+  return fetchOpenLigaArray<GoalGetter>(
+    "getgoalgetters/" + encodeURIComponent(league) + "/" + encodeURIComponent(season),
+    "OpenLigaDB goal getters"
+  );
+}
+
 export async function fetchMatches(league: string, season: string): Promise<Match[]> {
   const response = await fetch("https://api.openligadb.de/getmatchdata/" + encodeURIComponent(league) + "/" + encodeURIComponent(season), { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("OpenLigaDB HTTP " + response.status);
