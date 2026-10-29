@@ -34,10 +34,35 @@ app.setErrorHandler((error, _request, reply) => {
   app.log.error(error);
   reply.code((error as any).statusCode ?? 500).send({ error: (error as any).code ?? "internal_error", message: (error as Error).message });
 });
+app.get("/", async () => ({
+  service: "footpulse-api",
+  status: "online",
+  health: "/api/health",
+  api: "/api/v1",
+}));
+
 app.get("/api/health", async () => {
-  let database = "not_configured";
-  if (pool) { try { await pool.query("SELECT 1"); database = "connected"; } catch { database = "unavailable"; } }
-  return { status: database === "connected" ? "ok" : "degraded", service: "footpulse-api", database, timestamp: new Date().toISOString() };
+  let database: "connected" | "not_configured" | "unavailable" = "not_configured";
+  let schema: "ready" | "missing" | "not_configured" | "unavailable" = "not_configured";
+  if (pool) {
+    try {
+      const result = await pool.query(
+        "SELECT to_regclass('public.matches') AS matches, to_regclass('public.players') AS players, to_regclass('public.match_events') AS match_events"
+      );
+      database = "connected";
+      schema = result.rows[0]?.matches && result.rows[0]?.players && result.rows[0]?.match_events ? "ready" : "missing";
+    } catch {
+      database = "unavailable";
+      schema = "unavailable";
+    }
+  }
+  return {
+    status: database === "connected" && schema === "ready" ? "ok" : "degraded",
+    service: "footpulse-api",
+    database,
+    schema,
+    timestamp: new Date().toISOString()
+  };
 });
 
 app.get("/api/v1/players", async (request, reply) => {
