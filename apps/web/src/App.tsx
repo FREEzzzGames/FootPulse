@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type DataSource, type Match, type MatchEvent, type PlayerSearchResult } from "./api";
+import { fetchApiHealth, fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type ApiHealth, type DataSource, type Match, type MatchEvent, type PlayerSearchResult } from "./api";
 
 const leagues = [{ id: "bl1", label: "Бундеслига" }, { id: "bl2", label: "2. Бундеслига" }, { id: "dfb", label: "DFB-Pokal" }, { id: "em", label: "Евро" }, { id: "wm", label: "Чемпионат мира" }];
 type View = "Матчи" | "Статистика" | "Источники";
@@ -9,6 +9,8 @@ function dateLabel(value: string) {
 }
 export function App() {
   const [view, setView] = useState<View>("Матчи");
+  const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null);
+  const [apiHealthError, setApiHealthError] = useState("");
   const [source, setSource] = useState<DataSource>("openligadb");
   const [league, setLeague] = useState("bl1");
   const [season, setSeason] = useState("2026");
@@ -24,6 +26,14 @@ export function App() {
   const [players, setPlayers] = useState<PlayerSearchResult[]>([]);
   const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
   const [playerSearchError, setPlayerSearchError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const check = () => void fetchApiHealth().then(value => { if (active) { setApiHealth(value); setApiHealthError(""); } }).catch(error => { if (active) { setApiHealth(null); setApiHealthError(error instanceof Error ? error.message : "API недоступен"); } });
+    check();
+    const timer = window.setInterval(check, 60000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   async function load(nextSource = source) {
     setLoading(true); setError("");
@@ -69,6 +79,10 @@ export function App() {
       <nav className="nav">{(["Матчи", "Статистика", "Источники"] as View[]).map(v => <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>{v}</button>)}</nav>
       <label className="search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Команда или игрок…" /></label>
     </header>
+    <div className={"system-status " + (apiHealthError ? "system-status-error" : apiHealth?.database === "connected" ? "system-status-ok" : "system-status-warn")} role="status" aria-live="polite">
+      <span className="system-status-dot" />
+      {apiHealthError ? "API недоступен: " + apiHealthError : apiHealth?.database === "connected" ? "Сервер API и PostgreSQL подключены" : apiHealth?.database === "not_configured" ? "API работает, PostgreSQL не настроен — серверный поиск игроков и архив недоступны" : apiHealth?.database === "unavailable" ? "PostgreSQL недоступен — серверный поиск игроков и архив временно недоступны" : "Проверка API…"}
+    </div>
 
     {view === "Матчи" && <main>
       <div className="pagehead"><div><div className="kicker">ОТКРЫТЫЕ ФУТБОЛЬНЫЕ ДАННЫЕ</div><h1>Матчи</h1></div><button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? "Загрузка…" : "↻"}</button></div>
