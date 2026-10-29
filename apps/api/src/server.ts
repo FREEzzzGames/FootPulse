@@ -208,8 +208,10 @@ app.post("/api/v1/admin/ingest/statsbomb-events", async (request, reply) => {
 app.post("/api/v1/admin/migrate", async (request, reply) => {
   if (!process.env.INGEST_TOKEN || request.headers.authorization !== "Bearer " + process.env.INGEST_TOKEN)
     return reply.code(401).send({ error: "unauthorized" });
-  const sql = await readFile("database/migrations/001_initial.sql", "utf8");
-  await db().query(sql);
+  const database = db();
+  for (const file of ["database/migrations/001_initial.sql", "database/migrations/002_dedup_indexes.sql"]) {
+    await database.query(await readFile(file, "utf8"));
+  }
   return { status: "migrated" };
 });
 
