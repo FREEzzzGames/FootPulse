@@ -74,3 +74,12 @@ export function score(match: Match): string {
   const result = list.find(x => x.resultTypeID === 2) ?? list.find(x => x.resultTypeID === 1) ?? list[list.length - 1];
   return result && result.pointsTeam1 != null && result.pointsTeam2 != null ? result.pointsTeam1 + " : " + result.pointsTeam2 : "— : —";
 }
+
+export interface PlayerSearchResult { id:number; full_name:string; given_name?:string|null; family_name?:string|null; nationality?:string|null; matches:number; goals:number; assists:number; }
+const API_BASE = "https://footpulse-api-36vo.onrender.com";
+export async function searchPlayers(query:string):Promise<PlayerSearchResult[]> {
+  const response = await fetch(API_BASE + "/api/v1/players?q=" + encodeURIComponent(query) + "&limit=12", {headers:{Accept:"application/json"}});
+  const body = await response.json().catch(()=>({}));
+  if (!response.ok) throw new Error(body.message || body.error || "Player database unavailable");
+  return Array.isArray(body.data) ? body.data as PlayerSearchResult[] : [];
+}
