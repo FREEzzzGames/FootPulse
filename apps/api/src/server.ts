@@ -50,10 +50,26 @@ app.get("/api/v1/players", async (request, reply) => {
       `SELECT p.id,p.full_name,p.given_name,p.family_name,p.birth_date,p.nationality,
         GREATEST(COALESCE(ms.matches,0),COALESCE(ev.matches,0))::int AS matches,
         GREATEST(COALESCE(ms.goals,0),COALESCE(ev.goals,0))::int AS goals,
-        COALESCE(ms.assists,0)::int AS assists
+        GREATEST(COALESCE(ms.assists,0),COALESCE(ev.assists,0))::int AS assists
        FROM players p
        LEFT JOIN (SELECT player_id,COUNT(DISTINCT match_id)::int AS matches,COALESCE(SUM(goals),0)::int AS goals,COALESCE(SUM(assists),0)::int AS assists FROM player_match_stats GROUP BY player_id) ms ON ms.player_id=p.id
-       LEFT JOIN (SELECT player_id,COUNT(DISTINCT match_id)::int AS matches,COUNT(*) FILTER (WHERE event_type='Shot' AND details#>>'{shot,outcome,name}'='Goal')::int AS goals FROM match_events GROUP BY player_id) ev ON ev.player_id=p.id
+       LEFT JOIN (
+         SELECT event_rows.player_id,
+           COUNT(DISTINCT event_rows.match_id)::int AS matches,
+           COUNT(*) FILTER (WHERE event_rows.event_type='Shot' AND event_rows.details#>>'{shot,outcome,name}'='Goal')::int AS goals,
+           COUNT(*) FILTER (
+             WHERE event_rows.event_type='Pass' AND EXISTS (
+               SELECT 1 FROM match_events goal_event
+               WHERE goal_event.match_id=event_rows.match_id
+                 AND goal_event.event_type='Shot'
+                 AND goal_event.details#>>'{shot,outcome,name}'='Goal'
+                 AND goal_event.details#>>'{shot,key_pass_id}'=event_rows.details->>'id'
+             )
+           )::int AS assists
+         FROM match_events event_rows
+         WHERE event_rows.player_id IS NOT NULL
+         GROUP BY event_rows.player_id
+       ) ev ON ev.player_id=p.id
        WHERE p.full_name ILIKE $1 OR p.family_name ILIKE $1 OR EXISTS
          (SELECT 1 FROM player_aliases pa WHERE pa.player_id=p.id AND pa.alias ILIKE $1)
        ORDER BY p.family_name NULLS LAST,p.full_name LIMIT $2`,
