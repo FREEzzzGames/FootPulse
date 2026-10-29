@@ -1,0 +1,45 @@
+name: FootPulse production smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for Render rollout
+        run: sleep 25
+
+      - name: Verify FootPulse web and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          web_url="https://footpulse-bzve.onrender.com/"
+          api_url="https://footpulse-api-36vo.onrender.com/api/health"
+          web_body=""
+          health=""
+          for attempt in $(seq 1 12); do
+            web_body="$(curl -fsSL --connect-timeout 10 --max-time 20 "$web_url" 2>/dev/null || true)"
+            health="$(curl -fsSL --connect-timeout 10 --max-time 20 "$api_url" 2>/dev/null || true)"
+            if [[ -n "$web_body" && -n "$health" ]]; then break; fi
+            echo "Waiting for public services ($attempt/12)"
+            sleep 5
+          done
+          test -n "$web_body" || { echo "FOOTPULSE_WEB_UNREACHABLE"; exit 1; }
+          test -n "$health" || { echo "FOOTPULSE_API_UNREACHABLE"; exit 1; }
+          HEALTH_JSON="$health" node --input-type=module -e '
+            const health = JSON.parse(process.env.HEALTH_JSON);
+            console.log("FOOTPULSE_API_HEALTH", JSON.stringify(health));
+            if (health.service !== "footpulse-api") throw new Error("Unexpected API service identity");
+            if (health.database !== "connected") throw new Error("PostgreSQL is not connected: " + health.database);
+            if (health.schema !== "ready") throw new Error("FootPulse database schema is not ready: " + health.schema);
+            console.log("FOOTPULSE_DATABASE_SCHEMA_READY");
+          '
+          grep -Eqi 'footpulse|<div id="root"|/assets/' <<< "$web_body"
+          echo "FOOTPULSE_WEB_OK"
