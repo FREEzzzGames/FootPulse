@@ -1,6 +1,6 @@
 export interface Team { teamId?: number; teamName?: string; }
 export interface Result { resultTypeID?: number; pointsTeam1?: number; pointsTeam2?: number; }
-export type DataSource = "openligadb" | "statsbomb";
+export type DataSource = "openligadb" | "statsbomb" | "archive";
 export interface Match {
   matchID: number;
   matchDateTime: string;
@@ -78,6 +78,51 @@ export function score(match: Match): string {
 
 export interface PlayerSearchResult { id:number; full_name:string; given_name?:string|null; family_name?:string|null; nationality?:string|null; matches:number; goals:number; assists:number; }
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://footpulse-api-36vo.onrender.com").replace(/\/+$/, "");
+
+
+export async function fetchArchiveMatches(): Promise<Match[]> {
+  const response = await fetch(API_BASE + "/api/v1/matches?limit=100&offset=0", { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+  const body = await response.json().catch(() => ({})) as { data?: Array<Record<string, unknown>>; message?: string; error?: string };
+  if (!response.ok) throw new Error(body.message || body.error || "Архив FootPulse недоступен");
+  if (!Array.isArray(body.data)) throw new Error("API вернул неожиданный формат архива");
+  return body.data.map(row => ({
+    matchID: Number(row.id),
+    sourceMatchId: Number(row.id),
+    matchDateTime: String(row.match_date || ""),
+    matchIsFinished: row.status === "finished",
+    team1: { teamName: String(row.home_team || "Команда 1") },
+    team2: { teamName: String(row.away_team || "Команда 2") },
+    homeScore: typeof row.home_score === "number" ? row.home_score : row.home_score == null ? null : Number(row.home_score),
+    awayScore: typeof row.away_score === "number" ? row.away_score : row.away_score == null ? null : Number(row.away_score),
+    leagueName: String(row.competition || "Архив FootPulse"),
+    competition: String(row.competition || ""),
+    source: "archive" as const,
+  }));
+}
+
+export async function fetchArchiveEvents(matchId: number): Promise<MatchEvent[]> {
+  const response = await fetch(API_BASE + "/api/v1/matches/" + encodeURIComponent(String(matchId)) + "/events", { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+  const body = await response.json().catch(() => ({})) as { data?: Array<Record<string, unknown>>; message?: string; error?: string };
+  if (!response.ok) throw new Error(body.message || body.error || "События матча недоступны");
+  if (!Array.isArray(body.data)) throw new Error("API вернул неожиданный формат событий");
+  return body.data.map(row => {
+    const details = row.details && typeof row.details === "object" ? row.details as Record<string, any> : {};
+    const type = details.type && typeof details.type === "object" ? details.type : { name: String(row.event_type || "Событие") };
+    return {
+      id: String(row.id ?? details.id ?? ""),
+      index: Number(details.index ?? 0),
+      minute: row.minute == null ? undefined : Number(row.minute),
+      type,
+      team: { name: String(row.team || "") },
+      player: { name: String(row.player || "") },
+      location: Array.isArray(details.location) ? details.location as number[] : undefined,
+      pass: details.pass && typeof details.pass === "object" ? details.pass : undefined,
+      shot: details.shot && typeof details.shot === "object" ? details.shot : undefined,
+      substitution: details.substitution && typeof details.substitution === "object" ? details.substitution : undefined,
+      position: details.position && typeof details.position === "object" ? details.position : undefined,
+    };
+  });
+}
 
 export interface ApiHealth { status: "ok" | "degraded"; database: "connected" | "not_configured" | "unavailable"; timestamp: string; }
 export async function fetchApiHealth(): Promise<ApiHealth> {
