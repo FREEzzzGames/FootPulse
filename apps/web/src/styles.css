@@ -35,3 +35,5 @@
 .tactical-footnote,.tactical-empty{font-size:10px;line-height:1.6;color:#8f8f8f}
 .tactical-empty{padding:16px;border:1px dashed #353535;margin:12px 0}
 @media(max-width:680px){.tactical{padding:9px}.tactical-pitch{max-height:none}.tactical-controls button{padding:0 8px}}
+
+.archive-note{margin:0 0 14px;padding:10px 12px;border-left:2px solid #ff394d;background:#111;color:#aaa;font-size:11px;line-height:1.6}
