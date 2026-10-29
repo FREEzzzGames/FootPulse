@@ -7,6 +7,63 @@ function dateLabel(value: string) {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? "Дата неизвестна" : d.toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
+
+function TacticalReplay({ events }: { events: MatchEvent[] }) {
+  const located = useMemo(() => events.filter(e => Array.isArray(e.location) && e.location.length >= 2), [events]);
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => { setIndex(0); setPlaying(false); }, [located]);
+  useEffect(() => {
+    if (!playing || located.length < 2) return;
+    const timer = window.setInterval(() => {
+      setIndex(current => {
+        if (current >= located.length - 1) { setPlaying(false); return current; }
+        return current + 1;
+      });
+    }, 850);
+    return () => window.clearInterval(timer);
+  }, [playing, located.length]);
+  if (!located.length) return <div className="tactical-empty">В выбранном матче нет координат событий для графического разбора.</div>;
+  const visible = located.slice(0, index + 1);
+  const current = located[index];
+  const point = (location: number[]) => ({ x: Math.max(0, Math.min(120, location[0])) * 5, y: (80 - Math.max(0, Math.min(80, location[1]))) * 5 });
+  const label = current?.type?.name || "Событие";
+  return <section className="tactical">
+    <div className="tactical-head"><b>ГРАФИЧЕСКИЙ РАЗБОР</b><span>{index + 1} / {located.length}</span></div>
+    <svg className="tactical-pitch" viewBox="0 0 600 400" role="img" aria-label="Футбольное поле с координатами реальных событий матча">
+      <rect x="1" y="1" width="598" height="398" rx="4" className="pitch-bg"/>
+      <g className="pitch-lines">
+        <rect x="18" y="18" width="564" height="364"/>
+        <line x1="300" y1="18" x2="300" y2="382"/>
+        <circle cx="300" cy="200" r="48"/>
+        <circle cx="300" cy="200" r="3" className="pitch-dot"/>
+        <rect x="18" y="112" width="90" height="176"/>
+        <rect x="18" y="150" width="35" height="100"/>
+        <rect x="492" y="112" width="90" height="176"/>
+        <rect x="547" y="150" width="35" height="100"/>
+      </g>
+      {visible.map((event, i) => {
+        const from = point(event.location!);
+        const end = event.type?.name === "Pass" && Array.isArray(event.pass?.end_location) && event.pass!.end_location!.length >= 2 ? point(event.pass!.end_location!) : null;
+        const active = i === index;
+        return <g key={event.id || i} className={active ? "tactical-event active" : "tactical-event"}>
+          {end && <line x1={from.x} y1={from.y} x2={end.x} y2={end.y} className="tactical-pass"/>}
+          {end && <circle cx={end.x} cy={end.y} r="3" className="tactical-destination"/>}
+          <circle cx={from.x} cy={from.y} r={active ? 7 : 4} className={event.type?.name === "Shot" ? "tactical-shot" : "tactical-marker"}/>
+        </g>;
+      })}
+    </svg>
+    <div className="tactical-current"><span className={label === "Shot" ? "tactical-current-dot shot" : "tactical-current-dot"}></span><b>{label}</b><span>{current?.player?.name || current?.team?.name || "Игрок не указан"}</span><time>{current?.minute ?? "—"}′</time></div>
+    <div className="tactical-controls">
+      <button type="button" onClick={() => { setIndex(0); setPlaying(false); }} aria-label="В начало">↤</button>
+      <button type="button" onClick={() => setPlaying(value => !value)} disabled={located.length < 2}>{playing ? "Ⅱ Пауза" : "▶ Воспроизвести"}</button>
+      <button type="button" onClick={() => { setPlaying(false); setIndex(value => Math.min(located.length - 1, value + 1)); }} aria-label="Следующее событие" disabled={index >= located.length - 1}>↦</button>
+    </div>
+    <input className="tactical-range" type="range" min="0" max={located.length - 1} value={index} aria-label="Положение в последовательности событий" onChange={e => { setPlaying(false); setIndex(Number(e.target.value)); }}/>
+    <div className="tactical-footnote">Координаты и последовательность взяты из StatsBomb Open Data. Это графическая визуализация событий, не видеозапись матча.</div>
+  </section>;
+}
+
 export function App() {
   const [view, setView] = useState<View>("Матчи");
   const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null);
@@ -113,7 +170,7 @@ export function App() {
     {selected && <div className="backdrop" onClick={() => setSelected(null)}><section className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
       <button className="close" onClick={() => setSelected(null)}>×</button><div className="kicker">{selected.leagueName || "Матч"} · {dateLabel(selected.matchDateTime)}</div><h2>{selected.team1?.teamName} <em>{score(selected)}</em> {selected.team2?.teamName}</h2>
       <div className="modalrule"></div>
-      {selected.source === "statsbomb" ? <><div className="eventhead"><b>СОБЫТИЯ МАТЧА</b><span>{eventsLoading ? "загрузка…" : events.length + " событий"}</span></div>{eventsError && <p className="fine">{eventsError}</p>}{!eventsLoading && !eventsError && <div className="eventstats"><div><b>{goalEvents.length}</b><small>голов по событиям</small></div><div><b>{events.filter(e => e.type?.name === "Shot").length}</b><small>ударов</small></div><div><b>{events.filter(e => e.type?.name === "Pass").length}</b><small>передач</small></div></div>}{events.slice(0, 250).filter(e => ["Shot", "Goal Keeper", "Substitution", "Half Start", "Half End", "Own Goal Against"].includes(e.type?.name || "")).map((e, i) => <div className="event" key={e.id || i}><time>{e.minute ?? "—"}′</time><span><b>{e.type?.name || "Событие"}</b><small>{e.player?.name || e.team?.name || "Данные источника"}</small></span><small>{e.shot?.outcome?.name || e.substitution?.replacement?.name || ""}</small></div>)}</> : <p className="fine">OpenLigaDB предоставляет результат и базовые сведения о матче. Подробные события и индивидуальная статистика показываются только при наличии их в подключённом источнике.</p>}
+      {selected.source === "statsbomb" ? <><div className="eventhead"><b>СОБЫТИЯ МАТЧА</b><span>{eventsLoading ? "загрузка…" : events.length + " событий"}</span></div>{eventsError && <p className="fine">{eventsError}</p>}{!eventsLoading && !eventsError && events.length > 0 && <TacticalReplay events={events} />}{!eventsLoading && !eventsError && <div className="eventstats"><div><b>{goalEvents.length}</b><small>голов по событиям</small></div><div><b>{events.filter(e => e.type?.name === "Shot").length}</b><small>ударов</small></div><div><b>{events.filter(e => e.type?.name === "Pass").length}</b><small>передач</small></div></div>}{events.slice(0, 250).filter(e => ["Shot", "Goal Keeper", "Substitution", "Half Start", "Half End", "Own Goal Against"].includes(e.type?.name || "")).map((e, i) => <div className="event" key={e.id || i}><time>{e.minute ?? "—"}′</time><span><b>{e.type?.name || "Событие"}</b><small>{e.player?.name || e.team?.name || "Данные источника"}</small></span><small>{e.shot?.outcome?.name || e.substitution?.replacement?.name || ""}</small></div>)}</> : <p className="fine">OpenLigaDB предоставляет результат и базовые сведения о матче. Подробные события и индивидуальная статистика показываются только при наличии их в подключённом источнике.</p>}
       <a className="source-link" href={selected.source === "statsbomb" ? "https://github.com/statsbomb/open-data" : "https://www.openligadb.de/"} target="_blank" rel="noreferrer">Открыть первоисточник ↗</a>
     </section></div>}
   </div>;
