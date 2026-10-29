@@ -76,7 +76,7 @@ export function score(match: Match): string {
 }
 
 export interface PlayerSearchResult { id:number; full_name:string; given_name?:string|null; family_name?:string|null; nationality?:string|null; matches:number; goals:number; assists:number; }
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://footpulse-api-36vo.onrender.com").replace(/\\/+$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://footpulse-api-36vo.onrender.com").replace(/\/+$/, "");
 
 export interface ApiHealth { status: "ok" | "degraded"; database: "connected" | "not_configured" | "unavailable"; timestamp: string; }
 export async function fetchApiHealth(): Promise<ApiHealth> {
