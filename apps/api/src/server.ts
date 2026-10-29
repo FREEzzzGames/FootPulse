@@ -32,7 +32,7 @@ const fetchJson = async (url: string) => {
 await app.register(cors, { origin: process.env.CORS_ORIGIN?.split(",") ?? true });
 app.setErrorHandler((error, _request, reply) => {
   app.log.error(error);
-  reply.code((error as any).statusCode ?? 500).send({ error: (error as any).code ?? "internal_error", message: error.message });
+  reply.code((error as any).statusCode ?? 500).send({ error: (error as any).code ?? "internal_error", message: (error as Error).message });
 });
 app.get("/api/health", async () => {
   let database = "not_configured";
