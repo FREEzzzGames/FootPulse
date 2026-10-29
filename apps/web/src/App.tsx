@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchApiHealth, fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type ApiHealth, type DataSource, type Match, type MatchEvent, type PlayerSearchResult } from "./api";
+import { fetchApiHealth, fetchArchiveEvents, fetchArchiveMatches, fetchMatches, fetchStatsBombEvents, fetchStatsBombWorldCup, searchPlayers, score, type ApiHealth, type DataSource, type Match, type MatchEvent, type PlayerSearchResult } from "./api";
 
 const leagues = [{ id: "bl1", label: "Бундеслига" }, { id: "bl2", label: "2. Бундеслига" }, { id: "dfb", label: "DFB-Pokal" }, { id: "em", label: "Евро" }, { id: "wm", label: "Чемпионат мира" }];
 type View = "Матчи" | "Статистика" | "Источники";
@@ -95,7 +95,7 @@ export function App() {
   async function load(nextSource = source) {
     setLoading(true); setError("");
     try {
-      const data = nextSource === "statsbomb" ? await fetchStatsBombWorldCup() : await fetchMatches(league, season);
+      const data = nextSource === "statsbomb" ? await fetchStatsBombWorldCup() : nextSource === "archive" ? await fetchArchiveMatches() : await fetchMatches(league, season);
       data.sort((a, b) => new Date(b.matchDateTime).getTime() - new Date(a.matchDateTime).getTime());
       setMatches(data);
       setUpdated(new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }));
@@ -108,9 +108,9 @@ export function App() {
 
   async function openMatch(match: Match) {
     setSelected(match); setEvents([]); setEventsError("");
-    if (match.source !== "statsbomb" || !match.sourceMatchId) return;
+    if (match.source === "openligadb" || !match.sourceMatchId) return;
     setEventsLoading(true);
-    try { setEvents(await fetchStatsBombEvents(match.sourceMatchId)); }
+    try { setEvents(match.source === "archive" ? await fetchArchiveEvents(match.sourceMatchId) : await fetchStatsBombEvents(match.sourceMatchId)); }
     catch (e) { setEventsError(e instanceof Error ? e.message : "Не удалось загрузить события"); }
     finally { setEventsLoading(false); }
   }
@@ -143,8 +143,9 @@ export function App() {
 
     {view === "Матчи" && <main>
       <div className="pagehead"><div><div className="kicker">ОТКРЫТЫЕ ФУТБОЛЬНЫЕ ДАННЫЕ</div><h1>Матчи</h1></div><button className="refresh" onClick={() => void load()} disabled={loading}>{loading ? "Загрузка…" : "↻"}</button></div>
-      <div className="source-switch"><button className={source === "openligadb" ? "chosen" : ""} onClick={() => setSource("openligadb")}>OpenLigaDB <small>Турниры Германии</small></button><button className={source === "statsbomb" ? "chosen" : ""} onClick={() => setSource("statsbomb")}>StatsBomb <small>ЧМ-2022 · события</small></button></div>
+      <div className="source-switch"><button className={source === "openligadb" ? "chosen" : ""} onClick={() => setSource("openligadb")}>OpenLigaDB <small>Турниры Германии</small></button><button className={source === "statsbomb" ? "chosen" : ""} onClick={() => setSource("statsbomb")}>StatsBomb <small>ЧМ-2022 · события</small></button><button className={source === "archive" ? "chosen" : ""} onClick={() => setSource("archive")}>Архив <small>PostgreSQL · импорт</small></button></div>
       {query.trim().length >= 2 && <section className="player-results"><div className="player-results-head"><b>ПОИСК ИГРОКОВ</b><span>{playerSearchLoading ? "поиск…" : players.length + " результатов"}</span></div>{playerSearchError ? <p className="fine">{playerSearchError}. Поиск использует единую базу FootPulse; если PostgreSQL ещё не подключён или не импортирован, результаты недоступны.</p> : !playerSearchLoading && !players.length ? <p className="fine">Игроки по этому запросу не найдены в импортированных данных.</p> : players.map(p => <div className="player-result" key={p.id}><span><b>{p.full_name}</b><small>{p.nationality || "Национальность не указана"} · {p.matches} матчей</small></span><strong>{p.goals} <small>ГОЛЫ</small></strong><strong>{p.assists} <small>ПАСЫ</small></strong></div>)}</section>}
+      {source === "archive" && <p className="archive-note">Архив из PostgreSQL FootPulse. Здесь отображаются только импортированные матчи; пустой архив не заполняется демонстрационными данными.</p>}
       {source === "openligadb" && <div className="filters"><select aria-label="Турнир" value={league} onChange={e => setLeague(e.target.value)}>{leagues.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}</select><select aria-label="Сезон" value={season} onChange={e => setSeason(e.target.value)}>{["2026", "2025", "2024", "2023", "2022", "2021", "2020"].map(y => <option key={y}>{y}</option>)}</select></div>}
       <div className="statsline"><span>{filtered.length} матчей</span><span>{finished} завершено</span><span className="live-dot">{loading ? "обновление" : error ? "источник недоступен" : "данные загружены"}</span></div>
       {error ? <div className="empty"><b>Не удалось получить данные</b><p>{error}</p><button onClick={() => void load()}>Повторить</button></div> : loading ? <div className="empty">Загружаем данные из выбранного источника…</div> : !filtered.length ? <div className="empty">Совпадений нет. Измените запрос или выберите другой турнир.</div> :
@@ -170,8 +171,8 @@ export function App() {
     {selected && <div className="backdrop" onClick={() => setSelected(null)}><section className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
       <button className="close" onClick={() => setSelected(null)}>×</button><div className="kicker">{selected.leagueName || "Матч"} · {dateLabel(selected.matchDateTime)}</div><h2>{selected.team1?.teamName} <em>{score(selected)}</em> {selected.team2?.teamName}</h2>
       <div className="modalrule"></div>
-      {selected.source === "statsbomb" ? <><div className="eventhead"><b>СОБЫТИЯ МАТЧА</b><span>{eventsLoading ? "загрузка…" : events.length + " событий"}</span></div>{eventsError && <p className="fine">{eventsError}</p>}{!eventsLoading && !eventsError && events.length > 0 && <TacticalReplay events={events} />}{!eventsLoading && !eventsError && <div className="eventstats"><div><b>{goalEvents.length}</b><small>голов по событиям</small></div><div><b>{events.filter(e => e.type?.name === "Shot").length}</b><small>ударов</small></div><div><b>{events.filter(e => e.type?.name === "Pass").length}</b><small>передач</small></div></div>}{events.slice(0, 250).filter(e => ["Shot", "Goal Keeper", "Substitution", "Half Start", "Half End", "Own Goal Against"].includes(e.type?.name || "")).map((e, i) => <div className="event" key={e.id || i}><time>{e.minute ?? "—"}′</time><span><b>{e.type?.name || "Событие"}</b><small>{e.player?.name || e.team?.name || "Данные источника"}</small></span><small>{e.shot?.outcome?.name || e.substitution?.replacement?.name || ""}</small></div>)}</> : <p className="fine">OpenLigaDB предоставляет результат и базовые сведения о матче. Подробные события и индивидуальная статистика показываются только при наличии их в подключённом источнике.</p>}
-      <a className="source-link" href={selected.source === "statsbomb" ? "https://github.com/statsbomb/open-data" : "https://www.openligadb.de/"} target="_blank" rel="noreferrer">Открыть первоисточник ↗</a>
+      {selected.source !== "openligadb" ? <><div className="eventhead"><b>СОБЫТИЯ МАТЧА</b><span>{eventsLoading ? "загрузка…" : events.length + " событий"}</span></div>{eventsError && <p className="fine">{eventsError}</p>}{!eventsLoading && !eventsError && events.length > 0 && <TacticalReplay events={events} />}{!eventsLoading && !eventsError && <div className="eventstats"><div><b>{goalEvents.length}</b><small>голов по событиям</small></div><div><b>{events.filter(e => e.type?.name === "Shot").length}</b><small>ударов</small></div><div><b>{events.filter(e => e.type?.name === "Pass").length}</b><small>передач</small></div></div>}{events.slice(0, 250).filter(e => ["Shot", "Goal Keeper", "Substitution", "Half Start", "Half End", "Own Goal Against"].includes(e.type?.name || "")).map((e, i) => <div className="event" key={e.id || i}><time>{e.minute ?? "—"}′</time><span><b>{e.type?.name || "Событие"}</b><small>{e.player?.name || e.team?.name || "Данные источника"}</small></span><small>{e.shot?.outcome?.name || e.substitution?.replacement?.name || ""}</small></div>)}</> : <p className="fine">OpenLigaDB предоставляет результат и базовые сведения о матче. Подробные события и индивидуальная статистика показываются только при наличии их в подключённом источнике.</p>}
+      <a className="source-link" href={selected.source === "openligadb" ? "https://www.openligadb.de/" : "https://github.com/statsbomb/open-data"} target="_blank" rel="noreferrer">Открыть первоисточник ↗</a>
     </section></div>}
   </div>;
 }
