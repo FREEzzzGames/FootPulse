@@ -48,12 +48,15 @@ app.get("/api/v1/players", async (request, reply) => {
   return getCached(key, async () => {
     const result = await db().query(
       `SELECT p.id,p.full_name,p.given_name,p.family_name,p.birth_date,p.nationality,
-        COUNT(DISTINCT pms.match_id)::int AS matches,
-        COALESCE(SUM(pms.goals),0)::int AS goals, COALESCE(SUM(pms.assists),0)::int AS assists
-       FROM players p LEFT JOIN player_match_stats pms ON pms.player_id=p.id
+        GREATEST(COALESCE(ms.matches,0),COALESCE(ev.matches,0))::int AS matches,
+        GREATEST(COALESCE(ms.goals,0),COALESCE(ev.goals,0))::int AS goals,
+        COALESCE(ms.assists,0)::int AS assists
+       FROM players p
+       LEFT JOIN (SELECT player_id,COUNT(DISTINCT match_id)::int AS matches,COALESCE(SUM(goals),0)::int AS goals,COALESCE(SUM(assists),0)::int AS assists FROM player_match_stats GROUP BY player_id) ms ON ms.player_id=p.id
+       LEFT JOIN (SELECT player_id,COUNT(DISTINCT match_id)::int AS matches,COUNT(*) FILTER (WHERE event_type='Shot' AND details#>>'{shot,outcome,name}'='Goal')::int AS goals FROM match_events GROUP BY player_id) ev ON ev.player_id=p.id
        WHERE p.full_name ILIKE $1 OR p.family_name ILIKE $1 OR EXISTS
          (SELECT 1 FROM player_aliases pa WHERE pa.player_id=p.id AND pa.alias ILIKE $1)
-       GROUP BY p.id ORDER BY p.family_name NULLS LAST,p.full_name LIMIT $2`,
+       ORDER BY p.family_name NULLS LAST,p.full_name LIMIT $2`,
       ["%" + q.replace(/[%_\\]/g, "\\$&") + "%", limit]);
     return { data: result.rows, query: q, limit };
   });
