@@ -155,6 +155,56 @@ app.post("/api/v1/admin/ingest/statsbomb", async (request, reply) => {
   }
 });
 
+app.post("/api/v1/admin/ingest/statsbomb-events", async (request, reply) => {
+  if (!process.env.INGEST_TOKEN || request.headers.authorization !== "Bearer " + process.env.INGEST_TOKEN)
+    return reply.code(401).send({ error: "unauthorized" });
+  const body = request.body as { matchIds?: number[] };
+  const ids = [...new Set((body?.matchIds ?? []).map(Number).filter(n => Number.isInteger(n) && n > 0))].slice(0, 20);
+  if (!ids.length) return reply.code(400).send({ error: "matchIds_required", message: "Передайте до 20 StatsBomb match ID за один запуск." });
+  const database = db();
+  const source = await database.query("SELECT id FROM data_sources WHERE name=$1", ["StatsBomb Open Data"]);
+  if (!source.rows[0]) return reply.code(409).send({ error: "import_matches_first", message: "Сначала импортируйте матчи StatsBomb." });
+  const sourceId = source.rows[0].id;
+  let seen=0, inserted=0;
+  for (const externalMatchId of ids) {
+    const mapping = await database.query("SELECT internal_id FROM source_records WHERE source_id=$1 AND entity_type='match' AND external_id=$2", [sourceId,String(externalMatchId)]);
+    if (!mapping.rows[0]) continue;
+    const matchId = mapping.rows[0].internal_id;
+    const events = await fetchJson(STATS + "/events/" + externalMatchId + ".json");
+    for (const event of events) {
+      seen++;
+      const eventType = String(event.type?.name ?? "Unknown");
+      const playerName = event.player?.name ? String(event.player.name) : null;
+      let playerId: number | null = null;
+      if (playerName) {
+        const player = await database.query(
+          `INSERT INTO players(full_name,given_name,family_name) VALUES($1,$2,$3)
+           ON CONFLICT DO NOTHING RETURNING id`,
+          [playerName, playerName.split(" ").slice(0,-1).join(" ") || null, playerName.split(" ").slice(-1)[0] || null]);
+        playerId = player.rows[0]?.id ?? (await database.query("SELECT id FROM players WHERE full_name=$1 ORDER BY id LIMIT 1",[playerName])).rows[0]?.id ?? null;
+      }
+      const teamName = event.team?.name ? String(event.team.name) : null;
+      let teamId: number | null = null;
+      if (teamName) {
+        const team = await database.query("INSERT INTO teams(name,team_type) VALUES($1,'other') ON CONFLICT DO NOTHING RETURNING id",[teamName]);
+        teamId = team.rows[0]?.id ?? (await database.query("SELECT id FROM teams WHERE name=$1 ORDER BY id LIMIT 1",[teamName])).rows[0]?.id ?? null;
+      }
+      const externalEventId = String(event.id ?? event.index ?? seen);
+      const prior = await database.query("SELECT id FROM match_events WHERE match_id=$1 AND source_id=$2 AND details->>'external_event_id'=$3 LIMIT 1",[matchId,sourceId,externalEventId]);
+      if (prior.rows[0]) {
+        await database.query("UPDATE match_events SET minute=$1,event_type=$2,team_id=$3,player_id=$4,details=$5::jsonb WHERE id=$6",
+          [event.minute ?? null,eventType,teamId,playerId,JSON.stringify({...event,external_event_id:externalEventId}),prior.rows[0].id]);
+      } else {
+        await database.query("INSERT INTO match_events(match_id,minute,event_type,team_id,player_id,source_id,details) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)",
+          [matchId,event.minute ?? null,eventType,teamId,playerId,sourceId,JSON.stringify({...event,external_event_id:externalEventId})]);
+        inserted++;
+      }
+    }
+  }
+  cache.clear();
+  return { status:"success", matchesRequested:ids.length, eventsSeen:seen, eventsInserted:inserted };
+});
+
 app.post("/api/v1/admin/migrate", async (request, reply) => {
   if (!process.env.INGEST_TOKEN || request.headers.authorization !== "Bearer " + process.env.INGEST_TOKEN)
     return reply.code(401).send({ error: "unauthorized" });
