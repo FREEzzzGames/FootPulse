@@ -30,6 +30,27 @@ export interface MatchEvent {
 }
 const STATS_BOMB_BASE = "https://raw.githubusercontent.com/statsbomb/open-data/master/data";
 
+
+export interface OpenLigaLeague { leagueId: number; leagueName: string; leagueShortcut: string; leagueSeason: string; }
+export async function fetchAvailableLeagues(season: string): Promise<OpenLigaLeague[]> {
+  const response = await fetch("https://api.openligadb.de/getavailableleagues/" + encodeURIComponent(season), {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error("OpenLigaDB leagues HTTP " + response.status);
+  const rows: unknown = await response.json();
+  if (!Array.isArray(rows)) throw new Error("Неожиданный формат списка лиг OpenLigaDB");
+  return rows.filter((row: any) => /fußball|fussball|football|soccer/i.test(String(row?.sport?.sportName ?? "")))
+    .filter((row: any) => row?.leagueShortcut && row?.leagueName)
+    .map((row: any) => ({
+      leagueId: Number(row.leagueId),
+      leagueName: String(row.leagueName),
+      leagueShortcut: String(row.leagueShortcut),
+      leagueSeason: String(row.leagueSeason ?? season),
+    }))
+    .sort((a: OpenLigaLeague, b: OpenLigaLeague) => a.leagueName.localeCompare(b.leagueName, "ru"));
+}
+
 export async function fetchMatches(league: string, season: string): Promise<Match[]> {
   const response = await fetch("https://api.openligadb.de/getmatchdata/" + encodeURIComponent(league) + "/" + encodeURIComponent(season), { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("OpenLigaDB HTTP " + response.status);
