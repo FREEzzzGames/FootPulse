@@ -37,3 +37,22 @@
 @media(max-width:680px){.tactical{padding:9px}.tactical-pitch{max-height:none}.tactical-controls button{padding:0 8px}}
 
 .archive-note{margin:0 0 14px;padding:10px 12px;border-left:2px solid #ff394d;background:#111;color:#aaa;font-size:11px;line-height:1.6}
+
+.stats-filters{display:flex;gap:8px;margin:0 0 20px}
+.stats-filters select{min-width:0;flex:1;padding:10px 12px;border:1px solid #383838;border-radius:0;background:#101010;color:#eee;font:11px 'DM Mono',monospace}
+.stats-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:18px 0 10px}
+.stats-section-head h2{margin:0;font-size:15px}
+.stats-section-head span{color:#8c8c8c;font:10px 'DM Mono',monospace}
+.table-wrap{width:100%;overflow-x:auto;border:1px solid #292929}
+.league-table{width:100%;min-width:440px;border-collapse:collapse;font-size:11px}
+.league-table th{padding:9px 7px;text-align:right;background:#151515;color:#999;font:9px 'DM Mono',monospace;white-space:nowrap}
+.league-table td{padding:10px 7px;text-align:right;border-top:1px solid #262626;font-variant-numeric:tabular-nums;white-space:nowrap}
+.league-table th:nth-child(2),.league-table td:nth-child(2){text-align:left;min-width:120px}
+.league-table td:nth-child(1){color:#888}
+.league-table td:last-child{color:#fff}
+.scorers-head{margin-top:24px}
+.scorers{border-top:1px solid #292929}
+.scorer-row{display:grid;grid-template-columns:24px minmax(0,1fr) 28px;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid #242424;font-size:12px}
+.scorer-rank{color:#888;font:10px 'DM Mono',monospace}
+.scorer-row strong{text-align:right;font:13px 'DM Mono',monospace;color:#ff5360}
+@media(max-width:680px){.stats-filters select{padding:10px 8px;font-size:10px}.league-table{font-size:10px}.league-table td{padding:9px 5px}.stats-section-head h2{font-size:14px}}
