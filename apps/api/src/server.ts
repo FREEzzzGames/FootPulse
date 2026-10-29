@@ -177,11 +177,14 @@ app.post("/api/v1/admin/ingest/statsbomb-events", async (request, reply) => {
       const playerName = event.player?.name ? String(event.player.name) : null;
       let playerId: number | null = null;
       if (playerName) {
-        const player = await database.query(
-          `INSERT INTO players(full_name,given_name,family_name) VALUES($1,$2,$3)
-           ON CONFLICT DO NOTHING RETURNING id`,
-          [playerName, playerName.split(" ").slice(0,-1).join(" ") || null, playerName.split(" ").slice(-1)[0] || null]);
-        playerId = player.rows[0]?.id ?? (await database.query("SELECT id FROM players WHERE full_name=$1 ORDER BY id LIMIT 1",[playerName])).rows[0]?.id ?? null;
+        const knownPlayer = await database.query("SELECT id FROM players WHERE full_name=$1 ORDER BY id LIMIT 1", [playerName]);
+        if (knownPlayer.rows[0]) playerId = knownPlayer.rows[0].id;
+        else {
+          const player = await database.query(
+            `INSERT INTO players(full_name,given_name,family_name) VALUES($1,$2,$3) RETURNING id`,
+            [playerName, playerName.split(" ").slice(0,-1).join(" ") || null, playerName.split(" ").slice(-1)[0] || null]);
+          playerId = player.rows[0].id;
+        }
       }
       const teamName = event.team?.name ? String(event.team.name) : null;
       let teamId: number | null = null;
