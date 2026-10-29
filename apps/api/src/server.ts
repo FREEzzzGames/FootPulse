@@ -124,15 +124,15 @@ app.post("/api/v1/admin/ingest/statsbomb", async (request, reply) => {
         `INSERT INTO competitions(name,country,gender) VALUES($1,$2,$3)
          ON CONFLICT DO NOTHING RETURNING id`, [c.competition_name, c.country_name ?? null, c.competition_gender ?? null]);
       let compId = comp.rows[0]?.id;
-      if (!compId) compId = (await database.query("SELECT id FROM competitions WHERE name=$1 AND country IS NOT DISTINCT FROM $2 ORDER BY id LIMIT 1",[c.competition_name,c.country_name ?? null])).rows[0]?.id;
+      if (!compId) compId = (await database.query("SELECT id FROM competitions WHERE lower(name)=lower($1) AND country IS NOT DISTINCT FROM $2 ORDER BY id LIMIT 1",[c.competition_name,c.country_name ?? null])).rows[0]?.id;
       const seasonName = String(c.season_name ?? "unknown");
-      const seasonRow = await database.query(`INSERT INTO seasons(competition_id,name) VALUES($1,$2) ON CONFLICT(competition_id,name) DO UPDATE SET name=EXCLUDED.name RETURNING id`,[compId,seasonName]);
+      const seasonRow = await database.query(`INSERT INTO seasons(competition_id,name) VALUES($1,$2) ON CONFLICT (competition_id,(lower(name))) DO UPDATE SET name=EXCLUDED.name RETURNING id`,[compId,seasonName]);
       for (const m of rows) {
         seen++;
         const homeName = String(m.home_team?.home_team_name ?? "Unknown");
         const awayName = String(m.away_team?.away_team_name ?? "Unknown");
         const home = await database.query(`INSERT INTO teams(name,team_type) VALUES($1,'other') ON CONFLICT DO NOTHING RETURNING id`,[homeName]);
-        const homeId = home.rows[0]?.id ?? (await database.query("SELECT id FROM teams WHERE name=$1 ORDER BY id LIMIT 1",[homeName])).rows[0].id;
+        const homeId = home.rows[0]?.id ?? (await database.query("SELECT id FROM teams WHERE lower(name)=lower($1) ORDER BY id LIMIT 1",[homeName])).rows[0].id;
         const away = await database.query(`INSERT INTO teams(name,team_type) VALUES($1,'other') ON CONFLICT DO NOTHING RETURNING id`,[awayName]);
         const awayId = away.rows[0]?.id ?? (await database.query("SELECT id FROM teams WHERE name=$1 ORDER BY id LIMIT 1",[awayName])).rows[0].id;
         const date = m.match_date ? String(m.match_date) : null;
