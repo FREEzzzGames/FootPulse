@@ -158,7 +158,7 @@ export function App() {
     </header>
     <div className={"system-status " + (apiHealthError ? "system-status-error" : apiHealth?.database === "connected" ? "system-status-ok" : "system-status-warn")} role="status" aria-live="polite">
       <span className="system-status-dot" />
-      {apiHealthError ? "API недоступен: " + apiHealthError : apiHealth?.database === "connected" ? "Сервер API и PostgreSQL подключены" : apiHealth?.database === "not_configured" ? "API работает, PostgreSQL не настроен — серверный поиск игроков и архив недоступны" : apiHealth?.database === "unavailable" ? "PostgreSQL недоступен — серверный поиск игроков и архив временно недоступны" : "Проверка API…"}
+      {apiHealthError ? "API недоступен: " + apiHealthError : apiHealth?.database === "connected" && apiHealth.schema === "ready" ? "API, PostgreSQL и схема архива готовы" : apiHealth?.database === "connected" && apiHealth.schema === "missing" ? "PostgreSQL подключён, но схема FootPulse не создана — нужен запуск миграций" : apiHealth?.database === "not_configured" ? "API работает, PostgreSQL не настроен — поиск игроков и архив недоступны" : apiHealth?.database === "unavailable" ? "PostgreSQL недоступен — поиск игроков и архив временно недоступны" : "Проверка API…"}
     </div>
 
     {view === "Матчи" && <main>
