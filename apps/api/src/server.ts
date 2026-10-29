@@ -121,7 +121,7 @@ app.post("/api/v1/admin/ingest/statsbomb", async (request, reply) => {
     for (const c of candidates) {
       const rows = await fetchJson(STATS + "/matches/" + c.competition_id + "/" + c.season_id + ".json");
       const comp = await database.query(
-        `INSERT INTO competitions(name,country,competition_type) VALUES($1,$2,$3)
+        `INSERT INTO competitions(name,country,gender) VALUES($1,$2,$3)
          ON CONFLICT DO NOTHING RETURNING id`, [c.competition_name, c.country_name ?? null, c.competition_gender ?? null]);
       let compId = comp.rows[0]?.id;
       if (!compId) compId = (await database.query("SELECT id FROM competitions WHERE name=$1 AND country IS NOT DISTINCT FROM $2 ORDER BY id LIMIT 1",[c.competition_name,c.country_name ?? null])).rows[0]?.id;
@@ -136,14 +136,20 @@ app.post("/api/v1/admin/ingest/statsbomb", async (request, reply) => {
         const away = await database.query(`INSERT INTO teams(name,team_type) VALUES($1,'other') ON CONFLICT DO NOTHING RETURNING id`,[awayName]);
         const awayId = away.rows[0]?.id ?? (await database.query("SELECT id FROM teams WHERE name=$1 ORDER BY id LIMIT 1",[awayName])).rows[0].id;
         const date = m.match_date ? String(m.match_date) : null;
-        const status = date && new Date(date) <= new Date() ? "finished" : "scheduled";
+        const hasScore = m.home_score != null && m.away_score != null;
+        const status = hasScore ? "finished" : date && new Date(date) > new Date() ? "scheduled" : "unknown";
         const result = await database.query(
           `INSERT INTO matches(match_date,status,home_team_id,away_team_id,competition_id,season_id,home_score,away_score,source_updated_at)
            VALUES($1,$2,$3,$4,$5,$6,$7,$8,now())
-           ON CONFLICT DO NOTHING RETURNING id`,
+           ON CONFLICT (match_date,home_team_id,away_team_id,competition_id,season_id) WHERE match_date IS NOT NULL
+           DO UPDATE SET status=EXCLUDED.status,
+             home_score=COALESCE(EXCLUDED.home_score,matches.home_score),
+             away_score=COALESCE(EXCLUDED.away_score,matches.away_score),
+             source_updated_at=now(),updated_at=now()
+           RETURNING id,(xmax=0) AS was_inserted`,
           [date,status,homeId,awayId,compId,seasonRow.rows[0].id,m.home_score ?? null,m.away_score ?? null]);
-        if (result.rows[0]) inserted++; else updated++;
-        const match = result.rows[0] ?? (await database.query("SELECT id FROM matches WHERE match_date IS NOT DISTINCT FROM $1 AND home_team_id=$2 AND away_team_id=$3 AND competition_id=$4 AND season_id=$5 ORDER BY id LIMIT 1",[date,homeId,awayId,compId,seasonRow.rows[0].id])).rows[0];
+        const match = result.rows[0];
+        if (match.was_inserted) inserted++; else updated++;
         await database.query(`INSERT INTO source_records(source_id,entity_type,external_id,internal_id,payload)
           VALUES($1,'match',$2,$3,$4::jsonb) ON CONFLICT(source_id,entity_type,external_id) DO UPDATE SET payload=EXCLUDED.payload,fetched_at=now()`,
           [sourceId,String(m.match_id),match.id,JSON.stringify(m)]);
