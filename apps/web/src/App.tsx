@@ -24,7 +24,8 @@ function TacticalReplay({ events }: { events: MatchEvent[] }) {
     if (playing && index >= located.length - 1) setPlaying(false);
   }, [playing, index, located.length]);
   if (!located.length) return <div className="tactical-empty">В выбранном матче нет координат событий для графического разбора.</div>;
-  const visible = located.slice(0, index + 1);
+  const start = Math.max(0, index - 79);
+  const visible = located.slice(start, index + 1);
   const current = located[index];
   const point = (location: number[]) => ({ x: Math.max(0, Math.min(120, location[0])) * 5, y: (80 - Math.max(0, Math.min(80, location[1]))) * 5 });
   const label = current?.type?.name || "Событие";
@@ -42,7 +43,8 @@ function TacticalReplay({ events }: { events: MatchEvent[] }) {
         <rect x="492" y="112" width="90" height="176"/>
         <rect x="547" y="150" width="35" height="100"/>
       </g>
-      {visible.map((event, i) => {
+      {visible.map((event, localIndex) => {
+        const i = start + localIndex;
         const from = point(event.location!);
         const end = event.type?.name === "Pass" && Array.isArray(event.pass?.end_location) && event.pass!.end_location!.length >= 2 ? point(event.pass!.end_location!) : null;
         const active = i === index;
