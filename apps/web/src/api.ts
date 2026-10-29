@@ -145,13 +145,13 @@ export async function fetchArchiveEvents(matchId: number): Promise<MatchEvent[]>
   });
 }
 
-export interface ApiHealth { status: "ok" | "degraded"; database: "connected" | "not_configured" | "unavailable"; timestamp: string; }
+export interface ApiHealth { status: "ok" | "degraded"; database: "connected" | "not_configured" | "unavailable"; schema?: "ready" | "missing" | "not_configured" | "unavailable"; timestamp: string; }
 export async function fetchApiHealth(): Promise<ApiHealth> {
   const response = await fetch(API_BASE + "/api/health", { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
   const body = await response.json().catch(() => ({})) as Partial<ApiHealth> & { message?: string };
   if (!response.ok) throw new Error(body.message || "API health HTTP " + response.status);
   if (body.status !== "ok" && body.status !== "degraded") throw new Error("Unexpected API health response");
-  return { status: body.status, database: body.database || "unavailable", timestamp: body.timestamp || "" };
+  return { status: body.status, database: body.database || "unavailable", schema: body.schema, timestamp: body.timestamp || "" };
 }
 export async function searchPlayers(query:string):Promise<PlayerSearchResult[]> {
   const response = await fetch(API_BASE + "/api/v1/players?q=" + encodeURIComponent(query) + "&limit=12", {headers:{Accept:"application/json"}});
