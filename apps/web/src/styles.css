@@ -8,3 +8,30 @@
 .system-status-ok{border-color:#244b34;color:#a8d9b7}.system-status-ok .system-status-dot{background:#55c779}
 .system-status-warn{border-color:#514126;color:#d5bc88}.system-status-warn .system-status-dot{background:#d9a441}
 .system-status-error{border-color:#5a2828;color:#efaaa5}.system-status-error .system-status-dot{background:#f05243}
+
+/* Tactical event replay: all plotted positions come from the selected open-data match. */
+.tactical{margin:16px 0 20px;padding:12px;border:1px solid #303030;background:#0b0b0b}
+.tactical-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;color:#d7d7d7;font:10px 'DM Mono',monospace;letter-spacing:.08em}
+.tactical-head span{color:#a7a7a7}
+.tactical-pitch{display:block;width:100%;max-height:360px;background:#111;margin:0 auto}
+.pitch-bg{fill:#10261d;stroke:#46705a;stroke-width:2}
+.pitch-lines{fill:none;stroke:#6a9279;stroke-width:1.5;opacity:.85}
+.pitch-dot{fill:#b9d9c3;stroke:none}
+.tactical-pass{stroke:#9bb5ff;stroke-width:2;stroke-dasharray:5 4;opacity:.8}
+.tactical-destination{fill:#9bb5ff}
+.tactical-marker{fill:#f3f3f3;stroke:#101010;stroke-width:1.5}
+.tactical-shot{fill:#ff4757;stroke:#fff;stroke-width:1.5}
+.tactical-event.active .tactical-marker,.tactical-event.active .tactical-shot{stroke:#fff;stroke-width:3}
+.tactical-current{display:flex;align-items:center;gap:8px;min-height:38px;padding:8px 0;color:#eee;font-size:11px}
+.tactical-current>span:nth-of-type(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a9a9a9}
+.tactical-current time{margin-left:auto;color:#fff;font:11px 'DM Mono',monospace}
+.tactical-current-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#dce5ff}
+.tactical-current-dot.shot{background:#ff4757}
+.tactical-controls{display:flex;align-items:center;gap:8px}
+.tactical-controls button{min-height:34px;padding:0 11px;border:1px solid #414141;background:#171717;color:#f1f1f1;font:11px 'DM Mono',monospace}
+.tactical-controls button:disabled{opacity:.4}
+.tactical-controls button:nth-child(2){flex:1;border-color:#6e252b;background:#2b1114}
+.tactical-range{display:block;width:100%;margin:12px 0;accent-color:#ff394d}
+.tactical-footnote,.tactical-empty{font-size:10px;line-height:1.6;color:#8f8f8f}
+.tactical-empty{padding:16px;border:1px dashed #353535;margin:12px 0}
+@media(max-width:680px){.tactical{padding:9px}.tactical-pitch{max-height:none}.tactical-controls button{padding:0 8px}}
