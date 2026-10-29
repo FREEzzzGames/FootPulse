@@ -90,7 +90,7 @@ export function App() {
     {view === "Источники" && <main><div className="pagehead"><div><div className="kicker">DATA REGISTRY</div><h1>Источники</h1></div></div><div className="registry">
       <a href="https://www.openligadb.de/" target="_blank" rel="noreferrer"><b>OpenLigaDB</b><span>Матчи и результаты · публичный API · без ключа</span><i>Подключён ↗</i></a>
       <a href="https://github.com/statsbomb/open-data" target="_blank" rel="noreferrer"><b>StatsBomb Open Data</b><span>События, удары, передачи, составы для выбранных соревнований · открытый набор</span><i>Подключён ↗</i></a>
-      <a href="https://www.football-data.co.uk/" target="_blank" rel="noreferrer"><b>football-data.co.uk</b><span>Исторические результаты и CSV-статистика · следующий источник для импорта</span><i>Доступен для интеграции ↗</i></a>
+      <a href="https://www.football-data.co.uk/" target="_blank" rel="noreferrer"><b>football-data.co.uk</b><span>CSV-архивы: только личное/академическое использование, ручная загрузка или лёгкий доступ не чаще 2 раз в неделю</span><i>Не подключён автоматически ↗</i></a>
       <a href="https://www.wikidata.org/" target="_blank" rel="noreferrer"><b>Wikidata</b><span>Справочные данные о клубах, соревнованиях и людях через SPARQL · требует отдельного адаптера</span><i>Доступен для интеграции ↗</i></a>
     </div><p className="fine">Бесплатный доступ не означает одинаковое покрытие, отсутствие лимитов или разрешение на любое повторное распространение. Для каждого источника сохраняем атрибуцию и границы покрытия.</p></main>}
 
