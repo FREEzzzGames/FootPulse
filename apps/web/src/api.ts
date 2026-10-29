@@ -22,10 +22,11 @@ export interface MatchEvent {
   type?: { name?: string };
   team?: { name?: string };
   player?: { name?: string };
-  pass?: { recipient?: { name?: string }; outcome?: { name?: string } };
+  pass?: { recipient?: { name?: string }; outcome?: { name?: string }; end_location?: number[] };
   shot?: { outcome?: { name?: string }; statsbomb_xg?: number };
   substitution?: { replacement?: { name?: string } };
   position?: { name?: string };
+  location?: number[];
 }
 const STATS_BOMB_BASE = "https://raw.githubusercontent.com/statsbomb/open-data/master/data";
 
