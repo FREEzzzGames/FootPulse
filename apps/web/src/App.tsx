@@ -16,13 +16,13 @@ function TacticalReplay({ events }: { events: MatchEvent[] }) {
   useEffect(() => {
     if (!playing || located.length < 2) return;
     const timer = window.setInterval(() => {
-      setIndex(current => {
-        if (current >= located.length - 1) { setPlaying(false); return current; }
-        return current + 1;
-      });
+      setIndex(current => Math.min(located.length - 1, current + 1));
     }, 850);
     return () => window.clearInterval(timer);
   }, [playing, located.length]);
+  useEffect(() => {
+    if (playing && index >= located.length - 1) setPlaying(false);
+  }, [playing, index, located.length]);
   if (!located.length) return <div className="tactical-empty">В выбранном матче нет координат событий для графического разбора.</div>;
   const visible = located.slice(0, index + 1);
   const current = located[index];
