@@ -1,1 +1,16 @@
-{"name":"footpulse","version":"0.1.0","private":true,"workspaces":["apps/*"],"scripts":{"dev:web":"npm --workspace @footpulse/web run dev","build":"npm run build --workspace @footpulse/web","typecheck":"npm run typecheck --workspace @footpulse/web"},"engines":{"node":">=20"}}
+{
+  "name": "footpulse",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @footpulse/web run dev",
+    "build": "npm run build --workspace @footpulse/web && npm run build --workspace @footpulse/api",
+    "typecheck": "npm run typecheck --workspace @footpulse/web && npm run typecheck --workspace @footpulse/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
